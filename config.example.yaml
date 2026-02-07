@@ -1,0 +1,78 @@
+# Restart Guard Configuration
+# Copy this file to your preferred location and fill in your values.
+# Pass the path to scripts via --config flag.
+#
+# Example:
+#   cp config.example.yaml ~/.openclaw/config/restart-guard.yaml
+#   python3 scripts/restart.py --config ~/.openclaw/config/restart-guard.yaml
+
+# --- Paths ---
+paths:
+  # Where to write the restart context file
+  context_file: "~/.openclaw/restart-guard/restart-context.md"
+  # Lock file to prevent restart storms
+  lock_file: "/tmp/restart-guard.lock"
+  # Restart log (append-only history)
+  restart_log: "~/.openclaw/restart-guard/restart.log"
+  # Config backup directory (before restart)
+  backup_dir: "~/.openclaw/restart-guard/backup"
+  # OpenClaw config file (for backup)
+  openclaw_config: "~/.openclaw/openclaw.json"
+  # OpenClaw binary (auto-detected via `which` if empty)
+  openclaw_bin: ""
+
+# --- Gateway ---
+gateway:
+  host: "127.0.0.1"
+  port: 18789
+  # Delay before SIGUSR1 restart (ms)
+  restart_delay_ms: 2000
+  # Environment variable name containing the auth token
+  auth_token_env: "GATEWAY_AUTH_TOKEN"
+
+# --- Guardian ---
+guardian:
+  # How often to poll gateway health (seconds)
+  poll_interval: 3
+  # Max time to wait for restart completion (seconds)
+  timeout: 120
+  # Commands to run on timeout for diagnostics
+  diagnostics:
+    - "openclaw doctor --non-interactive"
+    - "openclaw logs --tail 30"
+
+# --- Safety ---
+safety:
+  # Minimum seconds between restarts
+  cooldown_seconds: 600
+  # Stop auto-restart after N consecutive failures
+  max_consecutive_failures: 3
+  # Backup openclaw.json before restart
+  backup_config: true
+
+# --- Notification ---
+# Guardian tries "primary" first; falls back to "fallback" if gateway is down.
+notification:
+  # Primary: use OpenClaw message tool (requires working gateway)
+  primary: "openclaw"
+  # Fallback: direct API call when gateway is down
+  # Options: "telegram", "slack", "discord", or "" (none)
+  fallback: ""
+
+  # Settings for OpenClaw message tool (primary)
+  openclaw:
+    channel: ""        # e.g. "telegram", "discord", "slack" (empty = default channel)
+    to: ""             # e.g. "726647436" for Telegram chat ID (empty = default)
+
+  # Telegram direct API (fallback)
+  telegram:
+    bot_token_env: "TELEGRAM_BOT_TOKEN"  # Env var name containing the bot token
+    chat_id: ""                          # Telegram chat ID to notify
+
+  # Slack webhook (fallback)
+  slack:
+    webhook_url_env: "SLACK_WEBHOOK_URL"  # Env var name containing the webhook URL
+
+  # Discord webhook (fallback)
+  discord:
+    webhook_url_env: "DISCORD_WEBHOOK_URL"  # Env var name containing the webhook URL
