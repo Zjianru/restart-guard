@@ -1,5 +1,9 @@
 # restart-guard
 
+[![ClawHub](https://img.shields.io/badge/ClawHub-restart--guard-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQyIDAtOC0zLjU4LTgtOHMzLjU4LTggOC04IDggMy41OCA4IDgtMy41OCA4LTggOHoiLz48L3N2Zz4=)](https://clawhub.com)
+[![GitHub Release](https://img.shields.io/github/v/release/Zjianru/restart-guard)](https://github.com/Zjianru/restart-guard/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+
 An [OpenClaw](https://github.com/openclaw/openclaw) skill for safely restarting the Gateway with context preservation, health monitoring, and failure notification.
 
 ## Why
