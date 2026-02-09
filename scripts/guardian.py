@@ -181,91 +181,10 @@ def cleanup_lock(lock_path):
 
 
 def notify(notif_config, full_config, oc_bin, message):
-    primary = notif_config.get("primary", "openclaw")
-    fallback = notif_config.get("fallback", "")
-    if primary == "openclaw":
-        if _notify_openclaw(notif_config, full_config, oc_bin, message):
-            return
-    if fallback:
-        _notify_fallback(fallback, notif_config, message)
-
-
-def _notify_openclaw(notif_config, full_config, oc_bin, message):
-    if not oc_bin:
-        return False
-    oc_notif = notif_config.get("openclaw", {})
-    gateway_cfg = full_config.get("gateway", {})
-    host = gateway_cfg.get("host", "127.0.0.1")
-    port = gateway_cfg.get("port", "18789")
-    auth_env = gateway_cfg.get("auth_token_env", "GATEWAY_AUTH_TOKEN")
-    auth_token = os.environ.get(auth_env, "") or dotenv_get(auth_env)
-    if not auth_token:
-        return False
-    url = f"http://{host}:{port}/tools/invoke"
-    args_obj = {"action": "send", "message": message}
-    channel = oc_notif.get("channel", "")
-    to = oc_notif.get("to", "")
-    if channel:
-        args_obj["channel"] = channel
-    if to:
-        args_obj["to"] = to
-    payload = json.dumps({"tool": "message", "args": args_obj, "sessionKey": "main"})
-    try:
-        result = subprocess.run(
-            ["curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
-             "-H", f"Authorization: Bearer {auth_token}",
-             "-H", "Content-Type: application/json",
-             "-d", payload, url],
-            capture_output=True, text=True, timeout=10,
-        )
-        return result.stdout.strip() == "200"
-    except Exception:
-        return False
-
-
-def _notify_fallback(channel, notif_config, message):
-    if channel == "telegram":
-        tg = notif_config.get("telegram", {})
-        token_env = tg.get("bot_token_env", "TELEGRAM_BOT_TOKEN")
-        token = os.environ.get(token_env, "") or dotenv_get(token_env)
-        chat_id = tg.get("chat_id", "")
-        if token and chat_id:
-            try:
-                subprocess.run(
-                    ["curl", "-sS", "-X", "POST",
-                     f"https://api.telegram.org/bot{token}/sendMessage",
-                     "-d", f"chat_id={chat_id}",
-                     "--data-urlencode", f"text={message}"],
-                    capture_output=True, timeout=10,
-                )
-            except Exception:
-                pass
-    elif channel == "slack":
-        sl = notif_config.get("slack", {})
-        url_env = sl.get("webhook_url_env", "SLACK_WEBHOOK_URL")
-        url = os.environ.get(url_env, "") or dotenv_get(url_env)
-        if url:
-            try:
-                subprocess.run(
-                    ["curl", "-sS", "-X", "POST", "-H", "Content-Type: application/json",
-                     "-d", json.dumps({"text": message}), url],
-                    capture_output=True, timeout=10,
-                )
-            except Exception:
-                pass
-    elif channel == "discord":
-        dc = notif_config.get("discord", {})
-        url_env = dc.get("webhook_url_env", "DISCORD_WEBHOOK_URL")
-        url = os.environ.get(url_env, "") or dotenv_get(url_env)
-        if url:
-            try:
-                subprocess.run(
-                    ["curl", "-sS", "-X", "POST", "-H", "Content-Type: application/json",
-                     "-d", json.dumps({"content": message}), url],
-                    capture_output=True, timeout=10,
-                )
-            except Exception:
-                pass
+    """Multi-channel notification (delegated to shared notify module)."""
+    sys.path.insert(0, SCRIPT_DIR)
+    from notify import notify as _notify
+    _notify(notif_config, full_config, oc_bin, message)
 
 
 def log(msg):

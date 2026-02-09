@@ -51,28 +51,43 @@ safety:
   backup_config: true
 
 # --- Notification ---
-# Guardian tries "primary" first; falls back to "fallback" if gateway is down.
+# Guardian tries "primary" first; falls back to "channels" if gateway is down.
+# All enabled channels in the list are notified (multi-channel broadcast).
 notification:
   # Primary: use OpenClaw message tool (requires working gateway)
   primary: "openclaw"
-  # Fallback: direct API call when gateway is down
-  # Options: "telegram", "slack", "discord", or "" (none)
-  fallback: ""
+
+  # Fallback channels: ALL listed channels are notified when primary fails.
+  # Supported: "telegram", "discord", "slack", "webhook"
+  # (Legacy: "fallback: telegram" still works for single channel)
+  channels:
+    # - telegram
+    # - discord
+    # - slack
+    # - webhook
 
   # Settings for OpenClaw message tool (primary)
   openclaw:
     channel: ""        # e.g. "telegram", "discord", "slack" (empty = default channel)
     to: ""             # e.g. "726647436" for Telegram chat ID (empty = default)
 
-  # Telegram direct API (fallback)
+  # Telegram direct API
   telegram:
     bot_token_env: "TELEGRAM_BOT_TOKEN"  # Env var name containing the bot token
     chat_id: ""                          # Telegram chat ID to notify
 
-  # Slack webhook (fallback)
+  # Discord webhook
+  discord:
+    webhook_url_env: "DISCORD_WEBHOOK_URL"  # Env var name containing the webhook URL
+
+  # Slack incoming webhook
   slack:
     webhook_url_env: "SLACK_WEBHOOK_URL"  # Env var name containing the webhook URL
 
-  # Discord webhook (fallback)
-  discord:
-    webhook_url_env: "DISCORD_WEBHOOK_URL"  # Env var name containing the webhook URL
+  # Generic webhook (any HTTP endpoint)
+  webhook:
+    url_env: "RESTART_GUARD_WEBHOOK_URL"  # Env var name containing the URL
+    method: "POST"                        # HTTP method
+    headers:                              # Custom headers
+      Content-Type: "application/json"
+    body_template: '{"text": "{{message}}"}'  # {{message}} is replaced with notification text

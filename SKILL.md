@@ -55,7 +55,7 @@ Runs independently. Polls `openclaw health --json` every N seconds.
 - **Success**: sends notification, releases lock, exits 0
 - **Timeout**: runs diagnostics (`openclaw doctor`, log tail), sends failure notification with diagnostics, releases lock, exits 1
 
-Notification priority: OpenClaw message tool (primary) → direct API fallback (Telegram/Slack/Discord).
+Notification priority: OpenClaw message tool (primary) → all configured fallback channels broadcast (Telegram/Discord/Slack/generic webhook). Multiple channels can be enabled simultaneously.
 
 ## Safety
 
