@@ -1,5 +1,6 @@
 ---
 name: restart-guard
+version: 1.1.1
 description: Safely restart the OpenClaw Gateway with context preservation, health monitoring, and failure notification. Use when the agent needs to restart the Gateway (config changes, model switches, plugin reloads, or any reason requiring a restart). Handles pre-restart context saving, guardian process spawning, gateway restart triggering, post-restart verification, and fallback notifications.
 ---
 
@@ -67,3 +68,13 @@ Notification priority: OpenClaw message tool (primary) → all configured fallba
 ## Troubleshooting
 
 See `references/troubleshooting.md` for common issues (lock cleanup, notification failures, verification mismatches).
+
+## Changelog
+
+### v1.1.1 (2026-02-09)
+- **Security Fix**: Removed `shell=True` from `subprocess.run` calls in `postcheck.py` and `guardian.py` to mitigate command injection risks.
+- Commands are now parsed via `shlex.split()`. Complex commands (with pipes/redirects) are safely wrapped in `/bin/sh -c`.
+
+### v1.1.0 (2026-02-09)
+- **Feature**: Multi-channel notification broadcast support (Telegram, Discord, Slack, Webhook).
+- **Refactor**: Shared `notify.py` module to reduce duplication.

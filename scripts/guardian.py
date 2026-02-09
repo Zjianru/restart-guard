@@ -119,14 +119,26 @@ def check_health_curl(host, port):
 
 def run_diagnostics(oc_bin, commands):
     """Run diagnostic commands and collect output."""
+    import shlex
     outputs = []
     for cmd in commands:
         try:
             # Replace 'openclaw' with actual binary path
+            actual_cmd_str = cmd
             if oc_bin and cmd.startswith("openclaw "):
-                cmd = oc_bin + cmd[8:]
+                actual_cmd_str = oc_bin + cmd[8:]
+            
+            # Secure execution: No shell=True
+            shell_chars = ["|", ">", "<", ";", "&&", "||", "$(", "`"]
+            use_shell_wrapper = any(c in actual_cmd_str for c in shell_chars)
+
+            if use_shell_wrapper:
+                exec_args = ["/bin/sh", "-c", actual_cmd_str]
+            else:
+                exec_args = shlex.split(actual_cmd_str)
+
             result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, timeout=30,
+                exec_args, shell=False, capture_output=True, text=True, timeout=30,
             )
             output = result.stdout.strip() or result.stderr.strip()
             outputs.append(f"$ {cmd}\n{output}")

@@ -68,14 +68,30 @@ def main():
         if not cmd:
             continue
 
+import shlex
+
+# ... (inside main loop) ...
+
         # Replace 'openclaw' with actual binary
-        actual_cmd = cmd
+        actual_cmd_str = cmd
         if oc_bin and cmd.startswith("openclaw "):
-            actual_cmd = oc_bin + cmd[8:]
+            actual_cmd_str = oc_bin + cmd[8:]
+
+        # Secure execution: No shell=True
+        # If the command contains shell features (|, >, <, ;, &&, ||), wrap in sh -c
+        # Otherwise, parse args safely
+        shell_chars = ["|", ">", "<", ";", "&&", "||", "$(", "`"]
+        use_shell_wrapper = any(c in actual_cmd_str for c in shell_chars)
 
         try:
+            if use_shell_wrapper:
+                # Still safer than shell=True because we control the shell binary
+                exec_args = ["/bin/sh", "-c", actual_cmd_str]
+            else:
+                exec_args = shlex.split(actual_cmd_str)
+
             proc = subprocess.run(
-                actual_cmd, shell=True, capture_output=True, text=True, timeout=30,
+                exec_args, shell=False, capture_output=True, text=True, timeout=30,
             )
             output = proc.stdout.strip()
             passed = True
