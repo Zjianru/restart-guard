@@ -2,6 +2,14 @@
 reason: ""
 triggered_at: ""
 triggered_by: ""
+restart_id: ""
+origin_session_key: ""
+notify_mode: "origin"
+channel_selection: {}
+effective_notify_plan: {}
+state_timestamps: {}
+diagnostics_file: ""
+delivery_status: ""
 verify:
   # Each entry: { command: "...", expect: "..." }
   # postcheck.py runs each command and checks if output contains 'expect'

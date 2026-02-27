@@ -14,7 +14,7 @@ Exit codes:
 import argparse
 import json
 import os
-import re
+import shlex
 import subprocess
 import shutil
 import sys
@@ -31,7 +31,7 @@ def main():
 
     config = load_config(args.config)
     paths = config.get("paths", {})
-    context_path = expand(paths.get("context_file", "~/.openclaw/net/work/restart-context.md"))
+    context_path = expand(paths.get("context_file", "~/.openclaw/custom/work/restart-context.md"))
     oc_bin = find_openclaw(paths.get("openclaw_bin", ""))
 
     if not os.path.isfile(context_path):
@@ -42,12 +42,15 @@ def main():
         sys.exit(0)  # Not an error — just no pending restart
 
     # Parse YAML frontmatter
-    frontmatter = parse_frontmatter(context_path)
-    if frontmatter is None:
+    frontmatter, _ = parse_markdown_frontmatter(context_path)
+    if not isinstance(frontmatter, dict):
         print("Error: cannot parse context file frontmatter", file=sys.stderr)
         sys.exit(2)
 
     reason = frontmatter.get("reason", "unknown")
+    restart_id = frontmatter.get("restart_id", "")
+    delivery_status = frontmatter.get("delivery_status", "")
+    diagnostics_file = frontmatter.get("diagnostics_file", "")
     verify_list = frontmatter.get("verify", [])
     resume_list = frontmatter.get("resume", [])
     rollback = frontmatter.get("rollback", {})
@@ -67,10 +70,6 @@ def main():
 
         if not cmd:
             continue
-
-import shlex
-
-# ... (inside main loop) ...
 
         # Replace 'openclaw' with actual binary
         actual_cmd_str = cmd
@@ -121,7 +120,10 @@ import shlex
 
     report = {
         "status": "passed" if all_passed else "failed",
+        "restart_id": restart_id,
         "reason": reason,
+        "delivery_status": delivery_status,
+        "diagnostics_file": diagnostics_file,
         "checks": results,
         "resume": resume_list,
         "rollback": rollback,
@@ -165,85 +167,16 @@ def find_openclaw(configured):
     return candidates[-1] if candidates else None
 
 
-def parse_frontmatter(path):
-    """Parse YAML frontmatter from a Markdown file (minimal, no PyYAML)."""
-    with open(path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # Extract between --- markers
-    m = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
-    if not m:
-        return None
-
-    yaml_text = m.group(1)
-    return _parse_yaml_block(yaml_text)
-
-
-def _parse_yaml_block(text):
-    """Minimal YAML parser for our frontmatter format."""
-    result = {}
-    current_key = None
-    current_list = None
-
-    for line in text.split("\n"):
-        stripped = line.rstrip()
-        if not stripped or stripped.startswith("#"):
-            continue
-
-        # Top-level key with value
-        m = re.match(r'^(\w[\w_]*):\s+(.+)$', stripped)
-        if m:
-            key, val = m.group(1), m.group(2).strip().strip('"').strip("'")
-            result[key] = val
-            current_key = key
-            current_list = None
-            continue
-
-        # Top-level key without value (start of block/list)
-        m = re.match(r'^(\w[\w_]*):\s*$', stripped)
-        if m:
-            current_key = m.group(1)
-            result[current_key] = {}
-            current_list = None
-            continue
-
-        # List item (string)
-        m = re.match(r'^  - "(.+)"$', stripped)
-        if m and current_key:
-            if not isinstance(result.get(current_key), list):
-                result[current_key] = []
-            result[current_key].append(m.group(1))
-            continue
-
-        # List item (dict start)
-        m = re.match(r'^  - (\w[\w_]*):\s+(.+)$', stripped)
-        if m and current_key:
-            if not isinstance(result.get(current_key), list):
-                result[current_key] = []
-            item = {m.group(1): m.group(2).strip().strip('"').strip("'")}
-            result[current_key].append(item)
-            current_list = result[current_key]
-            continue
-
-        # Dict continuation (4-space indent)
-        m = re.match(r'^    (\w[\w_]*):\s+(.+)$', stripped)
-        if m and current_list and len(current_list) > 0:
-            current_list[-1][m.group(1)] = m.group(2).strip().strip('"').strip("'")
-            continue
-
-        # Sub-key (2-space indent, in dict)
-        m = re.match(r'^  (\w[\w_]*):\s+(.+)$', stripped)
-        if m and current_key and isinstance(result.get(current_key), dict):
-            result[current_key][m.group(1)] = m.group(2).strip().strip('"').strip("'")
-            continue
-
-    return result
-
-
 def load_config(path):
     sys.path.insert(0, SCRIPT_DIR)
     from write_context import load_config as _load
     return _load(path)
+
+
+def parse_markdown_frontmatter(path):
+    sys.path.insert(0, SCRIPT_DIR)
+    from write_context import parse_markdown_frontmatter as _parse
+    return _parse(path)
 
 
 if __name__ == "__main__":

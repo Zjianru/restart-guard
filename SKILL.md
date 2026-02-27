@@ -1,26 +1,77 @@
 ---
 name: restart-guard
-version: 1.1.1
-description: Safely restart the OpenClaw Gateway with context preservation, health monitoring, and failure notification. Use when the agent needs to restart the Gateway (config changes, model switches, plugin reloads, or any reason requiring a restart). Handles pre-restart context saving, guardian process spawning, gateway restart triggering, post-restart verification, and fallback notifications.
+version: 2.1.0
+description: Deterministic OpenClaw gateway restart with down/up state-machine verification, origin-session proactive ACK, and backward-compatible config.
 ---
 
 # Restart Guard
 
-Safely restart the OpenClaw Gateway with context preservation and automated health verification.
+## Purpose / 目标
 
-## Prerequisites
+Safely restart gateway while preserving context and guaranteeing a post-restart report path to the user session.  
+安全重启网关，保留上下文，并保证重启后可主动回报到用户会话。
 
-- `commands.restart: true` in `openclaw.json`
-- Agent has `gateway` and `exec` tools allowed
-- Config file ready (copy `config.example.yaml`, fill in values, pass via `--config`)
+## Trigger / 触发条件
 
-## Flow
+Use this skill when the task involves OpenClaw gateway restart, watchdog recovery, or post-restart reporting.  
+当任务涉及 OpenClaw 网关重启、看门狗恢复、重启后回报时使用。
 
+Natural-language triggers (must auto-run, do not ask user for script commands):
+- "可以重启了"
+- "现在重启吧"
+- "restart now"
+- "go ahead and restart"
+
+自然语言触发（必须自动执行，不让用户手工跑脚本）：
+- “可以重启了”
+- “现在重启吧”
+- “restart now”
+- “go ahead and restart”
+
+## Required Preconditions / 前置条件
+
+- `openclaw` CLI is available.
+- Restart config exists (`config.example.yaml` or `config/restart-guard.yaml.example` copied to runtime path).
+- Agent can execute shell commands.
+- `openclaw` CLI 可用。
+- 重启配置文件存在（从示例拷贝到运行路径）。
+- agent 具备执行命令能力。
+
+## Workflow / 标准流程
+
+### 0) Default behavior / 默认行为
+
+When user expresses restart intent without specifying channel details:
+- Run full flow automatically via `scripts/auto_restart.py`.
+- Default `--notify-mode origin`.
+- Infer origin session key automatically (env/context/sessions), no user input required.
+- Auto-discover external channels and persist `effective_notify_plan`.
+- Before trigger, proactively announce disaster delivery route/channels to origin session.
+- After restart event arrives, net summarizes result to user.
+
+当用户仅表达重启意图且未指定渠道细节时：
+- 使用 `scripts/auto_restart.py` 自动执行全流程。
+- 默认 `--notify-mode origin`。
+- 自动推断源会话 key（env/context/sessions），无需用户补参数。
+- 自动发现外部渠道并写入 `effective_notify_plan`。
+- 触发前先在源会话预告灾难通知路由与渠道。
+- 收到重启事件后，由 net 向用户汇总结果。
+
+### 1) Discover channels and mode / 发现渠道与模式（可选）
+
+```bash
+python3 <skill-dir>/scripts/discover_channels.py --config <config-path> --json
 ```
-write_context.py → restart.py → [SIGUSR1] → guardian.py monitors → postcheck.py verifies
-```
 
-### 1. Write Context
+Ask user:
+- notify mode (`origin` recommended, or `selected`, `all`)
+- selected channel/target if needed
+
+询问用户：
+- 通知模式（推荐 `origin`，可选 `selected`、`all`）
+- 若需要，指定渠道与目标
+
+### 2) Write context / 写入现场
 
 ```bash
 python3 <skill-dir>/scripts/write_context.py \
@@ -30,51 +81,91 @@ python3 <skill-dir>/scripts/write_context.py \
   --resume "report restart result to user"
 ```
 
-Generates a context file with YAML frontmatter (machine-readable: reason, verify commands, resume steps, rollback path) and Markdown body (human-readable notes).
+### 3) Execute restart / 执行重启
 
-### 2. Restart
+Recommended one-command entry:
 
 ```bash
-python3 <skill-dir>/scripts/restart.py --config <config-path> --reason "config change"
+python3 <skill-dir>/scripts/auto_restart.py \
+  --config <config-path> \
+  --reason "config change" \
+  --notify-mode origin
 ```
 
-Validates context → checks cooldown lock → backs up `openclaw.json` → spawns guardian (detached, survives restart) → sends pre-restart notification → triggers `gateway.restart`.
+推荐单命令入口：
 
-### 3. Post-Restart Verification
+```bash
+python3 <skill-dir>/scripts/auto_restart.py \
+  --config <config-path> \
+  --reason "配置变更" \
+  --notify-mode origin
+```
 
-After gateway pings the session back:
+```bash
+python3 <skill-dir>/scripts/restart.py \
+  --config <config-path> \
+  --reason "config change" \
+  --notify-mode origin \
+  --origin-session-key <session-key>
+```
+
+Selected channel mode:
+
+```bash
+python3 <skill-dir>/scripts/restart.py \
+  --config <config-path> \
+  --reason "config change" \
+  --notify-mode selected \
+  --channel telegram \
+  --target 726647436
+```
+
+### 4) Postcheck / 事后校验
 
 ```bash
 python3 <skill-dir>/scripts/postcheck.py --config <config-path>
 ```
 
-Reads `verify` commands from context frontmatter, runs each, compares output to expected value. Returns JSON (`--json`) or human-readable report.
+## Contract / 契约
 
-### 4. Guardian Behavior
+- Event contract: `restart_guard.result.v1`
+- Required fields: `status`, `restart_id`
+- Context adds:
+  - `restart_id`
+  - `origin_session_key`
+  - `notify_mode`
+  - `channel_selection`
+  - `effective_notify_plan`
+  - `state_timestamps`
+  - `diagnostics_file`
+  - `delivery_status`
+- Optional event fields:
+  - `severity`
+  - `failure_phase`
+  - `error_code`
+  - `delivery_attempts`
+  - `delivery_route`
+  - `delivery_exhausted`
+  - `diagnostics_file`
 
-Runs independently. Polls `openclaw health --json` every N seconds.
-- **Success**: sends notification, releases lock, exits 0
-- **Timeout**: runs diagnostics (`openclaw doctor`, log tail), sends failure notification with diagnostics, releases lock, exits 1
+## Notes / 注意事项
 
-Notification priority: OpenClaw message tool (primary) → all configured fallback channels broadcast (Telegram/Discord/Slack/generic webhook). Multiple channels can be enabled simultaneously.
+- `webui` is not treated as disabled notification anymore; origin-session ACK is primary path.
+- `webui` 不再视为禁用通知；主路径是回发到发起会话。
+- For implementation-level replication details, see `ENHANCED_RESTART_IMPLEMENTATION_SPEC.md`.
+- 若需按工程级标准复刻实现，请参考 `ENHANCED_RESTART_IMPLEMENTATION_SPEC.md`。
+- Do not expose internal scripts/steps unless user explicitly asks for internals.
+- 除非用户明确要求细节，否则不要向用户暴露内部脚本步骤。
+- Guardian uses strict success invariant:
+  - `down_detected && start_attempted && up_healthy`
+- Guardian success requires strict invariant:
+  - `down_detected && start_attempted && up_healthy`
 
-## Safety
+## Failure Handling / 故障处理
 
-- **Cooldown lock**: minimum interval between restarts (default 600s)
-- **Consecutive failure limit**: stops auto-restart after N failures (default 3)
-- **Config backup**: `openclaw.json` backed up before each restart
-- **Guardian detached**: `start_new_session=True` (setsid), not `exec background`
-
-## Troubleshooting
-
-See `references/troubleshooting.md` for common issues (lock cleanup, notification failures, verification mismatches).
-
-## Changelog
-
-### v1.1.1 (2026-02-09)
-- **Security Fix**: Removed `shell=True` from `subprocess.run` calls in `postcheck.py` and `guardian.py` to mitigate command injection risks.
-- Commands are now parsed via `shlex.split()`. Complex commands (with pipes/redirects) are safely wrapped in `/bin/sh -c`.
-
-### v1.1.0 (2026-02-09)
-- **Feature**: Multi-channel notification broadcast support (Telegram, Discord, Slack, Webhook).
-- **Refactor**: Shared `notify.py` module to reduce duplication.
+- On timeout/failure, guardian writes local diagnostics file (`restart-diagnostics-<restart_id>.md/json`), sends concise summary, and retries delivery within budget.
+- 若超时或失败，guardian 会写本地诊断文件（`restart-diagnostics-<restart_id>.md/json`），发送简要摘要，并在预算内重试送达。
+- Fixed disaster route: `origin session -> agent:main:main -> all discovered external channels`.
+- 固定灾难路由：`源会话 -> agent:main:main -> 所有已发现外部渠道`。
+- Guardian exits after successful delivery or budget exhaustion; no long-lived watchdog process after disaster handling.
+- 灾难处理结束后（送达成功或预算耗尽）guardian 必须退出，不长期驻留。

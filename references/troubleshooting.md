@@ -44,7 +44,7 @@ Check:
 If restart fails and you need to rollback:
 
 ```bash
-cp ~/.openclaw/net/work/restart-backup/openclaw.json ~/.openclaw/openclaw.json
+cp ~/.openclaw/custom/work/restart-backup/openclaw.json ~/.openclaw/openclaw.json
 openclaw gateway restart  # or manually: openclaw gateway stop && openclaw gateway start
 ```
 
