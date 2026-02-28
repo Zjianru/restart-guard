@@ -1,7 +1,8 @@
 ---
 name: restart-guard
-version: 2.1.1
+version: 2.1.2
 description: Deterministic OpenClaw gateway restart with down/up state-machine verification, origin-session proactive ACK, and backward-compatible config.
+metadata: {"openclaw":{"requires":{"bins":["python3","curl"],"env":["GATEWAY_AUTH_TOKEN"],"env_any":["TELEGRAM_BOT_TOKEN","DISCORD_WEBHOOK_URL","SLACK_WEBHOOK_URL","RESTART_GUARD_WEBHOOK_URL","FEISHU_WEBHOOK_URL"]}}}
 ---
 
 # Restart Guard
