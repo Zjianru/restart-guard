@@ -404,8 +404,30 @@ def check_health(oc_bin, host, port):
     return check_health_curl(host, port)
 
 
+def _validate_host_port(host, port):
+    """Validate host and port for URL construction."""
+    if not host or not isinstance(host, str):
+        raise ValueError("Host must be a non-empty string")
+    host = host.strip()
+    dangerous_chars = ('\x00', '\n', '\r', ' ', '\t', '<', '>', '"', '{', '}', '|', '\\', '^', '`')
+    for char in dangerous_chars:
+        if char in host:
+            raise ValueError(f"Host contains invalid character")
+    try:
+        port_num = int(port)
+        if not (1 <= port_num <= 65535):
+            raise ValueError("Port out of range")
+    except (ValueError, TypeError):
+        raise ValueError("Invalid port")
+    return host, str(port)
+
+
 def check_health_curl(host, port):
     try:
+        try:
+            host, port = _validate_host_port(host, port)
+        except ValueError:
+            return False
         result = subprocess.run(
             ["curl", "-sS", "--max-time", "5", f"http://{host}:{port}/health"],
             capture_output=True,
