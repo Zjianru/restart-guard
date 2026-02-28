@@ -1,6 +1,6 @@
 ---
 name: restart-guard
-version: 2.1.0
+version: 2.1.1
 description: Deterministic OpenClaw gateway restart with down/up state-machine verification, origin-session proactive ACK, and backward-compatible config.
 ---
 
@@ -152,6 +152,8 @@ python3 <skill-dir>/scripts/postcheck.py --config <config-path>
 
 - `webui` is not treated as disabled notification anymore; origin-session ACK is primary path.
 - `webui` 不再视为禁用通知；主路径是回发到发起会话。
+- Verify/diagnostics commands run in strict non-shell mode.
+- 校验/诊断命令以严格非 shell 模式执行（包含管道等 shell 元字符会被拒绝）。
 - For implementation-level replication details, see `ENHANCED_RESTART_IMPLEMENTATION_SPEC.md`.
 - 若需按工程级标准复刻实现，请参考 `ENHANCED_RESTART_IMPLEMENTATION_SPEC.md`。
 - Do not expose internal scripts/steps unless user explicitly asks for internals.

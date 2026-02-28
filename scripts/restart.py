@@ -234,11 +234,24 @@ def main():
         print(f"Restart triggered ({method}). Guardian is monitoring. restart_id={restart_id}")
         sys.exit(0)
 
-    stop_guardian_process(guardian_proc)
     log_entry(log_path, "trigger_failed", detail, restart_id)
+    ack_ok, ack_note = report_trigger_failure_to_origin(
+        oc_bin=oc_bin,
+        origin_session_key=origin_session_key,
+        restart_id=restart_id,
+        detail=detail,
+    )
+    if ack_ok:
+        log_entry(log_path, "trigger_failed_ack_origin", ack_note, restart_id)
+    else:
+        log_entry(log_path, "trigger_failed_ack_origin_failed", ack_note, restart_id)
     notify(pre_notif, config, oc_bin, f"[restart-guard] restart trigger failed: {detail}")
-    cleanup_lock(lock_path)
-    sys.exit(1)
+    # Keep guardian alive for fallback recovery and deterministic failure delivery.
+    print(
+        "Restart trigger failed, guardian fallback remains active. "
+        f"restart_id={restart_id}; detail={detail}"
+    )
+    sys.exit(0)
 
 
 def normalize_notify_mode(raw):
@@ -578,9 +591,12 @@ def trigger_restart_http(host, port, delay_ms, auth_token):
 def trigger_restart_signal(host, port):
     if not is_local_host(host):
         return False, "non-local-host"
+    lsof_bin = find_lsof_bin()
+    if not lsof_bin:
+        return False, "lsof_missing"
     try:
         result = subprocess.run(
-            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+            [lsof_bin, "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -635,6 +651,24 @@ def trigger_restart_cli(oc_bin):
         return False, str(e)
 
 
+def report_trigger_failure_to_origin(oc_bin, origin_session_key, restart_id, detail):
+    session_key = (origin_session_key or "").strip() or DEFAULT_MAIN_SESSION
+    message = (
+        "[restart_guard.result.v1]\n"
+        "status: fail\n"
+        "severity: critical\n"
+        f"restart_id: {restart_id}\n"
+        "failure_phase: TRIGGER\n"
+        "error_code: TRIGGER_FAILED\n"
+        "delivery_route: origin_session\n"
+        f"note: restart trigger failed: {detail}\n"
+        "action_required:\n"
+        "1. Wait for guardian fallback result in this session.\n"
+        "2. If no follow-up arrives, run postcheck and inspect restart.log/guardian.log.\n"
+    )
+    return send_agent_message(oc_bin, session_key, message)
+
+
 def send_agent_message(oc_bin, session_key, message):
     if not oc_bin:
         return False, "missing openclaw binary"
@@ -680,6 +714,16 @@ def find_openclaw(configured):
 
     candidates = sorted(glob.glob(os.path.expanduser("~/.nvm/versions/node/*/bin/openclaw")))
     return candidates[-1] if candidates else None
+
+
+def find_lsof_bin():
+    p = shutil.which("lsof")
+    if p and os.path.isfile(p) and os.access(p, os.X_OK):
+        return p
+    for candidate in ("/usr/sbin/lsof", "/usr/bin/lsof"):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return ""
 
 
 def dotenv_get(key):

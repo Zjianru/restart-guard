@@ -21,6 +21,7 @@ import sys
 from datetime import datetime, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SHELL_METACHARS = ("|", ">", "<", ";", "&&", "||", "$(", "`")
 
 
 def main():
@@ -76,18 +77,13 @@ def main():
         if oc_bin and cmd.startswith("openclaw "):
             actual_cmd_str = oc_bin + cmd[8:]
 
-        # Secure execution: No shell=True
-        # If the command contains shell features (|, >, <, ;, &&, ||), wrap in sh -c
-        # Otherwise, parse args safely
-        shell_chars = ["|", ">", "<", ";", "&&", "||", "$(", "`"]
-        use_shell_wrapper = any(c in actual_cmd_str for c in shell_chars)
-
         try:
-            if use_shell_wrapper:
-                # Still safer than shell=True because we control the shell binary
-                exec_args = ["/bin/sh", "-c", actual_cmd_str]
-            else:
-                exec_args = shlex.split(actual_cmd_str)
+            # Hard block shell metacharacters to keep execution deterministic and non-shell.
+            if contains_shell_metachar(actual_cmd_str):
+                raise ValueError("shell metacharacters are not allowed in verify commands")
+            exec_args = shlex.split(actual_cmd_str)
+            if not exec_args:
+                raise ValueError("empty command after parsing")
 
             proc = subprocess.run(
                 exec_args, shell=False, capture_output=True, text=True, timeout=30,
@@ -109,6 +105,15 @@ def main():
             if not passed:
                 all_passed = False
         except (subprocess.TimeoutExpired, OSError) as e:
+            results.append({
+                "command": cmd,
+                "expect": expect,
+                "output": str(e),
+                "returncode": -1,
+                "passed": False,
+            })
+            all_passed = False
+        except ValueError as e:
             results.append({
                 "command": cmd,
                 "expect": expect,
@@ -177,6 +182,11 @@ def parse_markdown_frontmatter(path):
     sys.path.insert(0, SCRIPT_DIR)
     from write_context import parse_markdown_frontmatter as _parse
     return _parse(path)
+
+
+def contains_shell_metachar(cmd):
+    text = str(cmd or "")
+    return any(token in text for token in SHELL_METACHARS)
 
 
 if __name__ == "__main__":

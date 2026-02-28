@@ -2,7 +2,7 @@ import os
 import unittest
 
 
-SCRIPT_DIR = "/Users/codez/.openclaw/agents/main/workspace/skills/restart-guard/scripts"
+SCRIPT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
 if SCRIPT_DIR not in os.sys.path:
     os.sys.path.insert(0, SCRIPT_DIR)
 

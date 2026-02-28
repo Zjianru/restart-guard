@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.1.1 - 2026-02-28
+
+- Hardened command execution in `postcheck.py` and guardian diagnostics:
+  - removed shell-wrapper fallback and enforce strict non-shell parsing.
+  - reject shell metacharacters in verify/diagnostics command strings.
+- Improved trigger-failure resilience in `restart.py`:
+  - keep guardian running when restart trigger fails (fallback recovery + delivery still proceed).
+  - add immediate failure event back to origin session on trigger failure.
+  - resolve `lsof` via explicit binary discovery to avoid PATH-related failures.
+- Improved test portability:
+  - replaced machine-specific absolute script paths with repo-relative paths.
+- Added repository hygiene files:
+  - `LICENSE` (MIT) and `.gitignore` (`__pycache__`, Python cache artifacts).
+- Added unit tests for restart runtime helpers (`lsof` resolution, trigger failure reporting).
+
 ## v2.1.0 - 2026-02-27
 
 - Reworked restart flow to strict state machine with invariant:
@@ -13,4 +28,3 @@
 - Fixed config parsing robustness and backward compatibility mappings for legacy fields.
 - Updated docs to bilingual format (`README.md`, `SKILL.md`) and added implementation spec.
 - Added unit tests for parser, state machine, delivery fallback, channel discovery, and origin selection.
-

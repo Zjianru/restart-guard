@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MAIN_SESSION = "agent:main:main"
+SHELL_METACHARS = ("|", ">", "<", ";", "&&", "||", "$(", "`")
 
 
 def main():
@@ -750,9 +751,11 @@ def run_diagnostics_commands(oc_bin, commands):
             actual = cmd
             if oc_bin and cmd.startswith("openclaw "):
                 actual = oc_bin + cmd[8:]
-            shell_chars = ["|", ">", "<", ";", "&&", "||", "$(", "`"]
-            use_shell_wrapper = any(c in actual for c in shell_chars)
-            exec_args = ["/bin/sh", "-c", actual] if use_shell_wrapper else shlex.split(actual)
+            if contains_shell_metachar(actual):
+                raise ValueError("shell metacharacters are not allowed in diagnostics commands")
+            exec_args = shlex.split(actual)
+            if not exec_args:
+                raise ValueError("empty command after parsing")
             result = subprocess.run(
                 exec_args,
                 shell=False,
@@ -865,6 +868,11 @@ def redact_sensitive(text):
     )
     val = re.sub(r"(?i)bearer\s+[A-Za-z0-9\-\._~\+\/]+=*", "bearer [REDACTED]", val)
     return val
+
+
+def contains_shell_metachar(cmd):
+    text = str(cmd or "")
+    return any(token in text for token in SHELL_METACHARS)
 
 
 def make_probe_callback(trace, phase):

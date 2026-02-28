@@ -7,9 +7,9 @@
 
 ## Release / 版本
 
-- Current: `v2.1.0`
+- Current: `v2.1.1`
 - Upgrade path: compatible with `v1.0.1` / `v1.1.x` config fields (no forced migration).
-- 当前版本：`v2.1.0`
+- 当前版本：`v2.1.1`
 - 升级路径：兼容 `v1.0.1` / `v1.1.x` 配置字段（无需强制迁移）。
 
 Full replication spec / 完整复刻规范:
@@ -127,3 +127,12 @@ restart-guard/
 - Python 3.10+
 - `curl`
 - `GATEWAY_AUTH_TOKEN` for HTTP tool path (restart chain still has signal/CLI fallback)
+
+## Security Notes / 安全说明
+
+- Verify/diagnostics commands run in strict non-shell mode.
+- Shell metacharacters are rejected in command strings (for example: `|`, `;`, `&&`, `` ` ``).
+
+## License / 许可
+
+MIT
