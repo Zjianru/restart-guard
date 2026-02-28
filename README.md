@@ -133,6 +133,27 @@ restart-guard/
 - Verify/diagnostics commands run in strict non-shell mode.
 - Shell metacharacters are rejected in command strings (for example: `|`, `;`, `&&`, `` ` ``).
 
+## Why ClawHub May Mark `suspicious` / 为什么可能被标记为 `suspicious`
+
+- This skill can restart gateway and send external notifications (Telegram/Feishu/Webhook-style channels).
+- 该 skill 具备“重启网关 + 外部通知”能力，属于高影响操作，因此在平台安全策略中可能被标注为 `suspicious`。
+- The `suspicious` label here is capability-based, not evidence of malicious behavior.
+- 这里的 `suspicious` 是“能力级风险提示”，不等于存在恶意行为。
+
+What this skill does for safety / 本 skill 的安全边界：
+- No command injection path: critical runtime commands use strict non-shell execution; shell metacharacters are explicitly rejected.
+- 无命令注入路径：关键运行命令采用严格非 shell 执行；显式拒绝 shell 元字符。
+- No extra port binding: restart-guard does not create a new listener or service port; it only checks/uses configured gateway endpoint.
+- 不新增端口监听：restart-guard 不创建新监听端口或新服务，仅检查/使用已配置网关端点。
+- Full source is public for audit.
+- 全量源码可审计：<https://github.com/Zjianru/restart-guard>
+
+Operational advantage / 实际优势：
+- External disaster notification ensures restart result is still delivered even if the origin session is interrupted.
+- 外部灾难通知确保源会话中断时仍可收到重启结果。
+- Strict state-machine verification reduces false-success restarts and repeated restart chaos.
+- 严格状态机校验可减少“假成功”与重复重启带来的运行混乱。
+
 ## License / 许可
 
 MIT

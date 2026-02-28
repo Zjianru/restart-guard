@@ -14,6 +14,7 @@
 - Added repository hygiene files:
   - `LICENSE` (MIT) and `.gitignore` (`__pycache__`, Python cache artifacts).
 - Added unit tests for restart runtime helpers (`lsof` resolution, trigger failure reporting).
+- Docs: added explicit `suspicious` rationale and security boundary notes (external notification necessity, no extra port binding, strict anti-injection stance).
 
 ## v2.1.0 - 2026-02-27
 
