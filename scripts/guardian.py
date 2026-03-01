@@ -406,6 +406,11 @@ def check_health(oc_bin, host, port):
 
 def check_health_curl(host, port):
     try:
+        try:
+            from write_context import validate_host_port
+            host, port = validate_host_port(host, port)
+        except ValueError:
+            return False
         result = subprocess.run(
             ["curl", "-sS", "--max-time", "5", f"http://{host}:{port}/health"],
             capture_output=True,

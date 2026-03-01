@@ -551,6 +551,17 @@ def trigger_restart(host, port, delay_ms, auth_token, oc_bin):
 def trigger_restart_http(host, port, delay_ms, auth_token):
     if not auth_token:
         return "", False, "missing-auth-token"
+    try:
+        host, port = validate_host_port(host, port)
+    except ValueError as e:
+        return "", False, f"invalid-host-port: {e}"
+
+
+def validate_host_port(host, port):
+    """Import from write_context for backwards compatibility."""
+    sys.path.insert(0, SCRIPT_DIR)
+    from write_context import validate_host_port as _validate
+    return _validate(host, port)
     url = f"http://{host}:{port}/tools/invoke"
     payload = json.dumps(
         {

@@ -112,6 +112,12 @@ def _notify_openclaw(notif_config, full_config, oc_bin, message, force_channel="
     gateway_cfg = full_config.get("gateway", {}) if isinstance(full_config, dict) else {}
     host = str(gateway_cfg.get("host", "127.0.0.1"))
     port = str(gateway_cfg.get("port", "18789"))
+    try:
+        from write_context import validate_host_port
+        host, port = validate_host_port(host, port)
+    except ValueError:
+        # Skip HTTP path on validation failure - fall through to CLI fallback below
+        host = None
     auth_env = str(gateway_cfg.get("auth_token_env", "GATEWAY_AUTH_TOKEN"))
     auth_token = _resolve_env(auth_env)
 
@@ -131,10 +137,12 @@ def _notify_openclaw(notif_config, full_config, oc_bin, message, force_channel="
         args_obj["target"] = target
         args_obj["to"] = target
 
-    url = f"http://{host}:{port}/tools/invoke"
-    payload = json.dumps({"tool": "message", "args": args_obj, "sessionKey": "main"})
+    # Skip HTTP if validation failed (host is None) - will fall through to CLI
+    if host is not None:
+        url = f"http://{host}:{port}/tools/invoke"
+        payload = json.dumps({"tool": "message", "args": args_obj, "sessionKey": "main"})
 
-    if auth_token:
+    if auth_token and host is not None:
         try:
             result = subprocess.run(
                 [
@@ -265,7 +273,10 @@ def _notify_webhook(notif_config, message):
     if not isinstance(headers, dict):
         headers = {"Content-Type": "application/json"}
     body_template = str(wh.get("body_template", '{"text": "{{message}}"}'))
-    body = body_template.replace("{{message}}", message.replace('"', '\\"'))
+    # Security: use proper JSON encoding instead of string replacement to prevent injection
+    body = _render_webhook_body(body_template, message)
+    if body is None:
+        return False
 
     cmd = ["curl", "-sS", "-X", method]
     for k, v in headers.items():
@@ -273,3 +284,50 @@ def _notify_webhook(notif_config, message):
     cmd.extend(["-d", body, url])
     result = subprocess.run(cmd, capture_output=True, timeout=10)
     return result.returncode == 0
+
+
+def _render_webhook_body(template, message):
+    """
+    Safely render webhook body template with message substitution.
+    Uses JSON-aware encoding to prevent injection attacks.
+    Returns None if template is invalid.
+    """
+    try:
+        # Validate that the template is valid JSON
+        parsed = json.loads(template)
+        # Recursively substitute {{message}} placeholders with proper JSON encoding
+        substituted = _substitute_message_placeholder(parsed, message)
+        return json.dumps(substituted, ensure_ascii=False)
+    except (json.JSONDecodeError, ValueError):
+        # Template is not valid JSON, fall back to safe string replacement.
+        # This is intentional: webhook endpoints may accept plain text, form-encoded,
+        # or other non-JSON bodies (configured via Content-Type header).
+        # Only allow simple string templates with exactly one placeholder.
+        if template.count("{{message}}") != 1:
+            return None
+        # Encode message as JSON string to safely escape all special characters
+        encoded = json.dumps(message, ensure_ascii=False)
+        # Remove surrounding quotes since we're inserting into a string context
+        if encoded.startswith('"') and encoded.endswith('"'):
+            encoded = encoded[1:-1]
+        return template.replace("{{message}}", encoded)
+
+
+def _substitute_message_placeholder(obj, message):
+    """Recursively substitute {{message}} placeholders in JSON structure."""
+    if isinstance(obj, str):
+        if "{{message}}" in obj:
+            # If the entire string is the placeholder, use the message as-is
+            if obj == "{{message}}":
+                return message
+            # Otherwise, do string replacement with JSON-encoded message
+            encoded = json.dumps(message, ensure_ascii=False)
+            if encoded.startswith('"') and encoded.endswith('"'):
+                encoded = encoded[1:-1]
+            return obj.replace("{{message}}", encoded)
+        return obj
+    if isinstance(obj, dict):
+        return {k: _substitute_message_placeholder(v, message) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_substitute_message_placeholder(item, message) for item in obj]
+    return obj
