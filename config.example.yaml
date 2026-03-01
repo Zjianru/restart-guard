@@ -9,13 +9,13 @@
 # --- Paths ---
 paths:
   # Where to write the restart context file
-  context_file: "~/.openclaw/custom/work/restart-context.md"
+  context_file: "~/.openclaw/custom/restart-guard-work/restart-context.md"
   # Lock file to prevent restart storms
   lock_file: "/tmp/restart-guard.lock"
   # Restart log (append-only history)
-  restart_log: "~/.openclaw/custom/work/restart.log"
+  restart_log: "~/.openclaw/custom/restart-guard-work/restart.log"
   # Config backup directory (before restart)
-  backup_dir: "~/.openclaw/custom/work/restart-backup"
+  backup_dir: "~/.openclaw/custom/restart-guard-work/restart-backup"
   # OpenClaw config file (for backup)
   openclaw_config: "~/.openclaw/openclaw.json"
   # OpenClaw binary (auto-detected via `which` if empty)
