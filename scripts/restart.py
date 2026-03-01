@@ -520,29 +520,6 @@ def is_local_host(host):
     return h in {"127.0.0.1", "localhost", "::1"}
 
 
-def validate_host_port(host, port):
-    """
-    Validate host and port values for URL construction.
-    Raises ValueError if invalid.
-    """
-    if not host or not isinstance(host, str):
-        raise ValueError("Host must be a non-empty string")
-    host = host.strip()
-    # Check for dangerous characters that could break URL parsing or enable injection
-    dangerous_chars = ('\x00', '\n', '\r', ' ', '\t', '<', '>', '"', '{', '}', '|', '\\', '^', '`')
-    for char in dangerous_chars:
-        if char in host:
-            raise ValueError(f"Host contains invalid character: {repr(char)}")
-    # Validate port
-    try:
-        port_num = int(port)
-        if not (1 <= port_num <= 65535):
-            raise ValueError(f"Port must be between 1-65535, got: {port_num}")
-    except (ValueError, TypeError) as e:
-        raise ValueError(f"Invalid port value: {port}") from e
-    return host, str(port)
-
-
 def trigger_restart(host, port, delay_ms, auth_token, oc_bin):
     notes = []
 
@@ -578,6 +555,13 @@ def trigger_restart_http(host, port, delay_ms, auth_token):
         host, port = validate_host_port(host, port)
     except ValueError as e:
         return "", False, f"invalid-host-port: {e}"
+
+
+def validate_host_port(host, port):
+    """Import from write_context for backwards compatibility."""
+    sys.path.insert(0, SCRIPT_DIR)
+    from write_context import validate_host_port as _validate
+    return _validate(host, port)
     url = f"http://{host}:{port}/tools/invoke"
     payload = json.dumps(
         {

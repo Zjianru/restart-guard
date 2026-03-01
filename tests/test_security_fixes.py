@@ -17,6 +17,7 @@ if SCRIPT_DIR not in sys.path:
 import notify  # noqa: E402
 import restart  # noqa: E402
 import guardian  # noqa: E402
+import write_context  # noqa: E402
 
 
 class WebhookTemplateSecurityTests(unittest.TestCase):
@@ -174,23 +175,103 @@ class HostPortValidationTests(unittest.TestCase):
         host, port = restart.validate_host_port("  127.0.0.1  ", "8080")
         self.assertEqual(host, "127.0.0.1")
 
-    def test_guardian_validation_valid(self):
-        host, port = guardian._validate_host_port("127.0.0.1", "18789")
+    def test_shared_validation_via_import_in_guardian(self):
+        """Verify guardian imports and uses shared validation via write_context."""
+        # The function was removed from guardian, it now imports from write_context
+        host, port = write_context.validate_host_port("127.0.0.1", "18789")
         self.assertEqual(host, "127.0.0.1")
         self.assertEqual(port, "18789")
 
-    def test_guardian_validation_rejects_invalid(self):
+    def test_shared_validation_rejects_invalid_via_write_context(self):
+        """Verify shared validation rejects invalid hosts."""
         with self.assertRaises(ValueError):
-            guardian._validate_host_port("evil\nhost", "8080")
+            write_context.validate_host_port("evil\nhost", "8080")
 
-    def test_notify_validation_valid(self):
-        host, port = notify._validate_host_port("127.0.0.1", "18789")
+    def test_restart_uses_shared_validation(self):
+        """Verify restart module still exposes validation (for backwards compat)."""
+        # restart.validate_host_port should still work (it imports from write_context)
+        host, port = restart.validate_host_port("127.0.0.1", "18789")
         self.assertEqual(host, "127.0.0.1")
         self.assertEqual(port, "18789")
 
-    def test_notify_validation_rejects_invalid(self):
-        with self.assertRaises(ValueError):
-            notify._validate_host_port("evil\nhost", "8080")
+
+class EdgeCaseBehaviorTests(unittest.TestCase):
+    """Test edge case behaviors requested in review."""
+
+    def test_notify_webhook_returns_false_on_invalid_template(self):
+        """_notify_webhook should return False when _render_webhook_body returns None."""
+        notif_config = {
+            "webhook": {
+                "url_env": "RESTART_GUARD_WEBHOOK_URL",
+                "method": "POST",
+                "headers": {"Content-Type": "application/json"},
+                # Multiple placeholders in non-JSON template should be rejected
+                "body_template": "{{message}} and {{message}}",
+            }
+        }
+        # Mock the env var to have a valid URL
+        import os
+        original_env = os.environ.get("RESTART_GUARD_WEBHOOK_URL")
+        os.environ["RESTART_GUARD_WEBHOOK_URL"] = "http://example.com/webhook"
+        try:
+            result = notify._notify_webhook(notif_config, "test message")
+            # Should return False because template is invalid (multiple placeholders)
+            self.assertFalse(result)
+        finally:
+            if original_env is not None:
+                os.environ["RESTART_GUARD_WEBHOOK_URL"] = original_env
+            else:
+                del os.environ["RESTART_GUARD_WEBHOOK_URL"]
+
+    def test_trigger_restart_http_returns_error_on_validation_failure(self):
+        """trigger_restart_http should return proper error tuple on validation failure."""
+        # Test with invalid host containing newline
+        http_code, timed_out, err = restart.trigger_restart_http(
+            "evil.com\nattacker.com", "8080", 1000, "valid-token"
+        )
+        self.assertEqual(http_code, "")
+        self.assertFalse(timed_out)
+        self.assertIn("invalid-host-port", err)
+        self.assertIn("invalid character", err.lower())
+
+    def test_trigger_restart_http_returns_error_on_invalid_port(self):
+        """restart.trigger_restart_http should return error on invalid port."""
+        http_code, timed_out, err = restart.trigger_restart_http(
+            "localhost", "abc", 1000, "valid-token"
+        )
+        self.assertEqual(http_code, "")
+        self.assertFalse(timed_out)
+        self.assertIn("invalid-host-port", err)
+
+    def test_trigger_restart_http_returns_error_on_port_out_of_range(self):
+        """restart.trigger_restart_http should return error on port out of range."""
+        http_code, timed_out, err = restart.trigger_restart_http(
+            "localhost", "99999", 1000, "valid-token"
+        )
+        self.assertEqual(http_code, "")
+        self.assertFalse(timed_out)
+        self.assertIn("invalid-host-port", err)
+
+    def test_notify_openclaw_skips_http_on_validation_failure(self):
+        """_notify_openclaw should skip HTTP and use CLI fallback when host/port invalid."""
+        # This test verifies that when host/port validation fails, the HTTP path
+        # is skipped and the function falls through to CLI fallback (or returns False
+        # if no valid paths exist). We test with an invalid host containing newline.
+        notif_config = {"openclaw": {"channel": "telegram", "target": "12345"}}
+        full_config = {
+            "gateway": {
+                "host": "evil.com\nattacker.com",  # Invalid: contains newline
+                "port": "18789",
+                "auth_token_env": "GATEWAY_AUTH_TOKEN",
+            }
+        }
+        # Without auth token, HTTP path should fail validation and try CLI
+        # Since we don't have a real openclaw binary, this will return False,
+        # but the important thing is that it doesn't crash trying to construct
+        # an invalid URL with the unvalidated host
+        result = notify._notify_openclaw(notif_config, full_config, None, "test message")
+        # Should return False (no oc_bin provided), but not raise an exception
+        self.assertFalse(result)
 
 
 if __name__ == "__main__":

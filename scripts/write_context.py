@@ -30,6 +30,30 @@ DEFAULT_BODY = """# Restart Context
 """
 
 
+def validate_host_port(host, port):
+    """
+    Validate host and port values for URL construction.
+    Rejects dangerous characters that could break URL parsing or enable injection.
+    Returns sanitized (host, port) tuple or raises ValueError.
+    """
+    if not host or not isinstance(host, str):
+        raise ValueError("Host must be a non-empty string")
+    host = host.strip()
+    # Check for dangerous characters that could break URL parsing or enable injection
+    dangerous_chars = ('\x00', '\n', '\r', ' ', '\t', '<', '>', '"', '{', '}', '|', '\\', '^', '`')
+    for char in dangerous_chars:
+        if char in host:
+            raise ValueError(f"Host contains invalid character: {repr(char)}")
+    # Validate port
+    try:
+        port_num = int(port)
+        if not (1 <= port_num <= 65535):
+            raise ValueError(f"Port must be between 1-65535, got: {port_num}")
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Invalid port value: {port}") from e
+    return host, str(port)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Write restart context file")
     parser.add_argument("--config", required=True, help="Path to restart-guard.yaml")

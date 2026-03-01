@@ -102,24 +102,6 @@ def _normalize_channels(raw):
     return []
 
 
-def _validate_host_port(host, port):
-    """Validate host and port for URL construction."""
-    if not host or not isinstance(host, str):
-        raise ValueError("Host must be a non-empty string")
-    host = host.strip()
-    dangerous_chars = ('\x00', '\n', '\r', ' ', '\t', '<', '>', '"', '{', '}', '|', '\\', '^', '`')
-    for char in dangerous_chars:
-        if char in host:
-            raise ValueError(f"Host contains invalid character")
-    try:
-        port_num = int(port)
-        if not (1 <= port_num <= 65535):
-            raise ValueError("Port out of range")
-    except (ValueError, TypeError):
-        raise ValueError("Invalid port")
-    return host, str(port)
-
-
 def _notify_openclaw(notif_config, full_config, oc_bin, message, force_channel=""):
     if not oc_bin:
         return False
@@ -131,10 +113,11 @@ def _notify_openclaw(notif_config, full_config, oc_bin, message, force_channel="
     host = str(gateway_cfg.get("host", "127.0.0.1"))
     port = str(gateway_cfg.get("port", "18789"))
     try:
-        host, port = _validate_host_port(host, port)
+        from write_context import validate_host_port
+        host, port = validate_host_port(host, port)
     except ValueError:
-        # Fall back to CLI if URL validation fails
-        pass
+        # Skip HTTP path on validation failure - fall through to CLI fallback below
+        host = None
     auth_env = str(gateway_cfg.get("auth_token_env", "GATEWAY_AUTH_TOKEN"))
     auth_token = _resolve_env(auth_env)
 
@@ -154,10 +137,12 @@ def _notify_openclaw(notif_config, full_config, oc_bin, message, force_channel="
         args_obj["target"] = target
         args_obj["to"] = target
 
-    url = f"http://{host}:{port}/tools/invoke"
-    payload = json.dumps({"tool": "message", "args": args_obj, "sessionKey": "main"})
+    # Skip HTTP if validation failed (host is None) - will fall through to CLI
+    if host is not None:
+        url = f"http://{host}:{port}/tools/invoke"
+        payload = json.dumps({"tool": "message", "args": args_obj, "sessionKey": "main"})
 
-    if auth_token:
+    if auth_token and host is not None:
         try:
             result = subprocess.run(
                 [
@@ -314,8 +299,10 @@ def _render_webhook_body(template, message):
         substituted = _substitute_message_placeholder(parsed, message)
         return json.dumps(substituted, ensure_ascii=False)
     except (json.JSONDecodeError, ValueError):
-        # Template is not valid JSON, fall back to safe string replacement
-        # Only allow simple string templates, reject complex structures
+        # Template is not valid JSON, fall back to safe string replacement.
+        # This is intentional: webhook endpoints may accept plain text, form-encoded,
+        # or other non-JSON bodies (configured via Content-Type header).
+        # Only allow simple string templates with exactly one placeholder.
         if template.count("{{message}}") != 1:
             return None
         # Encode message as JSON string to safely escape all special characters
