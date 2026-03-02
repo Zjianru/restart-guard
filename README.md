@@ -7,9 +7,9 @@
 
 ## Release / 版本
 
-- Current: `v2.1.1`
+- Current: `v2.2.0`
 - Upgrade path: compatible with `v1.0.1` / `v1.1.x` config fields (no forced migration).
-- 当前版本：`v2.1.1`
+- 当前版本：`v2.2.0`
 - 升级路径：兼容 `v1.0.1` / `v1.1.x` 配置字段（无需强制迁移）。
 
 Full replication spec / 完整复刻规范:

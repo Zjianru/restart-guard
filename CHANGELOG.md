@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.2.0 - 2026-03-03
+
+- **Security**: Fixed webhook template injection vulnerability (PR #2 by @heavygee):
+  - Added JSON-aware template rendering with proper escaping to prevent injection attacks.
+  - Added `validate_host_port()` function to reject dangerous characters in host/port values.
+  - Applied validation across all HTTP request construction points.
+- **Breaking**: Renamed work directory from `custom/work` to `custom/restart-guard-work` for better clarity.
+  - Update your config file paths if using custom locations.
+- Added comprehensive security tests for template injection and URL validation.
+- Improved error handling for invalid host/port configurations.
+
 ## v2.1.1 - 2026-02-28
 
 - Hardened command execution in `postcheck.py` and guardian diagnostics:
